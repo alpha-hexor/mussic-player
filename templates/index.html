@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Music Player</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <style>
+        body {
+            background: rgb(2, 0, 36);
+            background: linear-gradient(90deg, rgba(2, 0, 36, 1) 0%, rgba(121, 9, 28, 1) 37%, rgba(0, 35, 255, 1) 100%);
+            color: #ffffff;
+        }
+        .search-bar {
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+        .music-card {
+            background-color: #1e1e1e;
+        }
+        .circular-image {
+            width: 200px;
+            height: 200px;
+            border-radius: 50%;
+            object-fit: cover;
+            margin: 0 auto;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            border: 4px solid #333;
+        }
+        .image-container {
+            width: 220px;
+            height: 220px;
+            margin: 0 auto;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(45deg, #ff9a9e, #fad0c4, #ffecd2);
+            border-radius: 50%;
+            padding: 10px;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col">
+    <header class="p-4 sticky top-0 z-10 bg-black bg-opacity-50">
+        <input type="text" id="search-input" class="search-bar w-full p-2 rounded-full text-white placeholder-gray-400 focus:outline-none" placeholder="Search for music...">
+    </header>
+
+    <main class="flex-grow p-4">
+        <div id="result" class="music-card p-4 rounded-lg mb-4 hidden">
+            <div class="image-container mb-4">
+                <img id="thumbnail" class="circular-image" src="" alt="Music Thumbnail">
+            </div>
+            <h2 id="song-title" class="text-xl font-bold mb-2 text-center"></h2>
+            <audio id="audio-player" class="w-full mb-2" controls></audio>
+            <button id="lyrics-btn" class="bg-purple-600 text-white px-4 py-2 rounded-full hover:bg-purple-700 transition-colors w-full">Show Lyrics</button>
+        </div>
+        <div id="lyrics" class="music-card p-4 rounded-lg mb-4 hidden">
+            <h3 class="text-lg font-bold mb-2">Lyrics</h3>
+            <p id="lyrics-text"></p>
+        </div>
+        <div id="next-songs" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4"></div>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <script>
+        const searchInput = document.getElementById('search-input');
+        const result = document.getElementById('result');
+        const thumbnail = document.getElementById('thumbnail');
+        const songTitle = document.getElementById('song-title');
+        const audioPlayer = document.getElementById('audio-player');
+        const lyricsBtn = document.getElementById('lyrics-btn');
+        const lyricsDiv = document.getElementById('lyrics');
+        const lyricsText = document.getElementById('lyrics-text');
+        const nextSongsDiv = document.getElementById('next-songs');
+
+        let currentVideoId = '';
+        let nextSongs = []; // Store the next songs here
+        let currentSongIndex = 0; // Track the current song index in nextSongs array
+
+        searchInput.addEventListener('keypress', async (e) => {
+            if (e.key === 'Enter') {
+                const query = searchInput.value;
+                try {
+                    const response = await axios.post('/search', { query });
+                    const { video_id, title, thumbnail: thumbUrl } = response.data;
+                    currentVideoId = video_id;
+                    displayResult(title, thumbUrl);
+                    const audioUrlResponse = await axios.post('/get_audio_url', { video_id });
+                    audioPlayer.src = audioUrlResponse.data.audio_url;
+                    audioPlayer.play();
+                    currentSongIndex = 0; // Reset index
+                    fetchNextSongs(video_id); // Fetch initial next songs
+                } catch (error) {
+                    console.error('Error searching for music:', error);
+                }
+            }
+        });
+
+        lyricsBtn.addEventListener('click', async () => {
+            try {
+                const response = await axios.post('/get_lyrics', { video_id: currentVideoId });
+                const lyrics = response.data.lyrics;
+                if (lyrics) {
+                    lyricsText.innerHTML = lyrics;
+                    lyricsDiv.classList.remove('hidden');
+                } else {
+                    lyricsText.textContent = 'Lyrics not available';
+                    lyricsDiv.classList.remove('hidden');
+                }
+            } catch (error) {
+                console.error('Error fetching lyrics:', error);
+            }
+        });
+
+        audioPlayer.addEventListener('ended', () => {
+            playNextSong();
+        });
+
+        function displayResult(title, thumbUrl) {
+            songTitle.textContent = title;
+            thumbnail.src = thumbUrl;
+            result.classList.remove('hidden');
+            lyricsDiv.classList.add('hidden');
+        }
+
+        async function fetchNextSongs(videoId) {
+            try {
+                const response = await axios.post('/next_songs', { video_id: videoId });
+                nextSongs = response.data.next_songs; // Store the next songs
+                currentSongIndex = 0; // Reset song index
+                displayNextSongs(nextSongs);
+            } catch (error) {
+                console.error('Error fetching next songs:', error);
+            }
+        }
+
+        function displayNextSongs(songs) {
+            nextSongsDiv.innerHTML = '';
+            songs.forEach((song, index) => {
+                const [title, artist, videoId] = song;
+                const songElement = document.createElement('div');
+                songElement.className = 'music-card p-4 rounded-lg cursor-pointer hover:bg-gray-800 transition-colors';
+                songElement.innerHTML = `
+                    <h3 class="font-bold">${title}</h3>
+                    <p class="text-gray-400">${artist}</p>
+                    <h2 style="display: none;">${videoId}</h2>
+                `;
+                songElement.addEventListener('click', () => playSong(videoId, title, true)); // Pass true to indicate manual click
+                nextSongsDiv.appendChild(songElement);
+            });
+        }
+
+        async function playSong(videoId, title, isManual = false) {
+            try {
+                currentVideoId = videoId;
+                const audioUrlResponse = await axios.post('/get_audio_url', { video_id: videoId });
+                audioPlayer.src = audioUrlResponse.data.audio_url;
+                audioPlayer.play();
+                displayResult(title, `https://img.youtube.com/vi/${videoId.replace(/[\n\s]/g, '')}/hqdefault.jpg`);
+                
+                if (isManual) {
+                    // When the user clicks on a song, generate a new next songs array
+                    fetchNextSongs(videoId);
+                }
+            } catch (error) {
+                console.error('Error playing song:', error);
+            }
+        }
+
+        function playNextSong() {
+            if (currentSongIndex < nextSongs.length - 1) {
+                // Play the next song in the array if available
+                const [title, , videoId] = nextSongs[currentSongIndex];
+                currentSongIndex++;
+                playSong(videoId, title);
+                
+            } else {
+                // If no more songs in the current array, fetch new next songs
+                const lastSong = nextSongs[nextSongs.length - 1];
+                const lastVideoId = lastSong[2]; // Get the video ID of the last song
+                const lastvidtitle = lastSong[0];
+                playSong(lastVideoId,lastvidtitle); 
+                fetchNextSongs(lastVideoId);
+            }
+        }
+
+    </script>
+</body>
+</html>
