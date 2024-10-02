@@ -17,6 +17,10 @@ pip install -r requirements.txt
 
 # Preview
 
+<img width="946" alt="image" src="https://github.com/user-attachments/assets/c947d058-55aa-4254-936f-c602487e0835">
+
+<img width="949" alt="image" src="https://github.com/user-attachments/assets/0c2093b5-af66-4ad7-8f98-bd2aec9ceaea">
+
 
 # Todo
 1. Better search regex.
